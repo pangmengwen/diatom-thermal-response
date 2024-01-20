@@ -3,9 +3,10 @@
 #for verify rate:u>0
 
 library(minpack.lm)
+library(ggplot2)
+
 dat<-read.csv(file.choose())
 str(dat)
-
 Johnson<-function(Temp,mu0,Ea,dED,Topt,Tref,kb=8.62E-5){
   stopifnot(dED!=0)
   T0<-273.15
@@ -22,8 +23,22 @@ u1<-dat[dat$Nutrient=="n1",]
 u11<-nlsLM(formula=GR~Johnson(Temp,mu0,Ea,dED,Topt,Tref=15),data=u1,control=nls.lm.control(ftol = 1E-12,ptol = 1E-12,maxiter = 1024),start=list(mu0=1,Ea=0.6,dED=0.5,Topt=20),jac=NULL,algorithm = "LM",lower = c(mu0=1E-6,Ea=0.001,dED=1E-2,Topt=0),upper = c(mu0=10,Ea=10,dED=20,Topt=40))
 summary(u11)
 
-#####using GAM to draw the relationship between DIN concentration and thermal traits
-### use Topt~s(DIN) as an example
+x1<-seq(20,36,by=0.01)
+preds1<-Johnson(Temp=x1,mu0=coef(u11)[1],Ea=coef(u11)[2],dED=coef(u11)[3],Topt=coef(u11)[4])
+fit1<-data.frame(id=rep(1,Temp=length(x1)),Nutrient=rep("u1",Temp=length(x1)),Temp=x1,preds=preds1)
+
+ggplot()+
+  geom_point(aes(x=Temp,y=GR,colour=Nutrient),data=u1,alpha=0.8,size=4)+
+  geom_line(aes(x=Temp,y=preds,colour=Nutrient),data=fit,alpha = 0.8,size=1.2,linetype="dashed")+
+  xlim(20,36)+ylim(-1,3)+
+  theme_bw()+theme(panel.grid=element_blank())+labs(x=expression(Temperautre~(degree*C)),y=expression(GR~(d^-1) ))+
+  theme(axis.title.y=element_text(size=24,family="Arial",face="bold"))+theme(axis.text.y=element_text(size=24,colour="black",family="Arial"))+
+  theme(axis.title.x=element_text(size=24,family="Arial",face="bold"))+
+  theme(axis.text.x=element_text(size=24,colour="black",family="Arial"))+theme(panel.border = element_rect(fill=NA,color="black", size=2.2, linetype="solid"))
+
+
+#####use GAM to draw the relationship between DIN concentration and thermal traits
+### Topt~s(DIN) as an example
 library(ggplot2)
 library(tidyverse)
 library(mgcv)
@@ -41,13 +56,12 @@ dat %>% ggplot(aes(x = Nutrient, y = Topt, group = Group))+
      xlim(0,33)+ylim(26,31.1)+
      scale_colour_manual(values=c("black","blue"))+scale_fill_manual(values = c("grey","lightblue"))
 
-###### using GAMMs to analyze historical data
+###### use GAMMs to analyze historical data
 ###use cell density of total diatoms as the example
 library(mgcv)
 library(itsadug)
 
 TD<-read.csv(file.choose())
-
 gamm_TD<-gamm(logDiatom~s(Temperature,bs="cr")+s(logDIN,bs="cr")+s(logDIP,bs="cr"), data=TD,method='REML',random=list(id=~1))
 summary(gamm_TD$lme)
 summary(gamm_TD$gam)
@@ -60,10 +74,10 @@ gamm_TD_inter1<-gamm(logDiatom~ti(Temperature,logDIN)+s(logDIN,bs="cr")+s(Temper
 summary(gamm_TD_inter1$lme)
 summary(gamm_TD_inter1$gam)
 
-####Pairplot 
+
+####Pairplot drawing
 
 env<-read.csv(file.choose())
-
 panel.cor<-function(x,y,digits=2, prefix="",cex.cor){
   usr<-par("usr")
   on.exit(par(usr))
@@ -74,7 +88,6 @@ panel.cor<-function(x,y,digits=2, prefix="",cex.cor){
   if(missing(cex.cor)) cex.cor<-0.8/strwidth(txt)
   text(0.5,0.5,txt,cex=cex.cor/1.8)
 }
-
 
 panel.hist <- function(x, ...){
   usr <- par("usr")
@@ -88,10 +101,10 @@ panel.hist <- function(x, ...){
   rect(breaks[-nB], 0, breaks[-1], y, col = "white", ...)
 }
 
-
 pairs(env, upper.panel = panel.cor,
       diag.panel = panel.hist,
       lower.panel = panel.smooth)
+
 
 #####VIF estimation
 library(car)
